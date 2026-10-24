@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from '/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript/lib/typescript.js';
+const source=readFileSync(new URL('../lib/recitation-alignment.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {normalizeArabic,compareRecitation}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+test('preserves original Quranic spelling; comparison normalizes diacritics',()=>{assert.equal(normalizeArabic('ٱلرَّحْمَـٰنِ'),'الرحمن');const x=compareRecitation('بِسْمِ ٱللَّهِ','بسم الله');assert.equal(x.agreement,100);});
+test('detects missing tokens',()=>{const x=compareRecitation('بسم الله الرحمن الرحيم','بسم الله الرحيم');assert.equal(x.counts.missing,1);assert.equal(x.tokens.some(x=>x.kind==='MISSING'&&x.expected==='الرحمن'),true);});
+test('detects additions',()=>{const x=compareRecitation('بسم الله','بسم سبحان الله');assert.equal(x.counts.extra,1);});
+test('detects substitutions',()=>{const x=compareRecitation('بسم الله','بسم الملك');assert.equal(x.counts.substituted,1);});
+test('detects adjacent word order errors',()=>{const x=compareRecitation('بسم الله الرحمن الرحيم','بسم الرحمن الله الرحيم');assert.equal(x.counts.order,2);});
+test('refuses excessive passage lengths to protect CPU',()=>{assert.throws(()=>compareRecitation('واحد '.repeat(451),'واحد'));});

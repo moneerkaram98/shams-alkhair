@@ -1,0 +1,29 @@
+# Provision Postgres and restricted user roles before starting the application.
+# Copy .env.runtime.example to .env.runtime with ONLY restricted database credentials.
+# Start with: docker compose -f compose.app.yml up --build -d
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.runtime
+    environment:
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:3000:3000"
+  # Optional: `docker compose -f compose.app.yml --profile asr up --build -d`.
+  # Service is reachable only on the project Docker network; never publicly expose :8000.
+  asr:
+    profiles: ["asr"]
+    build: ./asr
+    restart: unless-stopped
+    environment:
+      RECITATION_ASR_TOKEN: ${RECITATION_ASR_TOKEN:?set-a-long-secret}
+      ASR_MODEL: ${ASR_MODEL:-small}
+      ASR_DEVICE: cpu
+      ASR_COMPUTE_TYPE: int8
+    expose: ["8000"]
+    volumes:
+      - asr_model_cache:/root/.cache/huggingface
+volumes:
+  asr_model_cache:
+# Never inject DATABASE_URL, the schema owner or dev CLI permissions into this container.

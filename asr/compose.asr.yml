@@ -1,0 +1,19 @@
+# Optional private ASR worker. Intentionally no public ports: attach to an internal Docker network.
+services:
+  asr:
+    build: .
+    restart: unless-stopped
+    environment:
+      RECITATION_ASR_TOKEN: ${RECITATION_ASR_TOKEN:?set-a-secret}
+      ASR_MODEL: ${ASR_MODEL:-small}
+      ASR_DEVICE: ${ASR_DEVICE:-cpu}
+      ASR_COMPUTE_TYPE: ${ASR_COMPUTE_TYPE:-int8}
+    expose: ["8000"]
+    volumes:
+      - asr_model_cache:/root/.cache/huggingface
+    networks: [asr_private]
+networks:
+  asr_private:
+    internal: true
+volumes:
+  asr_model_cache:

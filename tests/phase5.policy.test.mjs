@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {validateVisibility,canViewVideo} from '../lib/video-policy.mjs';
+const base={scope:'men',status:'READY',reviewStatus:'APPROVED',publishedAt:new Date(),deletedAt:null,visibility:'GROUP',groupId:'group-a',levelId:null};
+const parent={scope:'men',staffAccess:false,activeEnrollments:[{groupId:'group-a',levelId:'level-1'}]};
+test('women and men content cannot become public under any target',()=>{assert.equal(validateVisibility('women','PUBLIC'),false);assert.equal(validateVisibility('men','PUBLIC'),false);assert.equal(validateVisibility('academy','PUBLIC'),true);assert.equal(validateVisibility('academy','PUBLIC',null,'group-a'),false)});
+test('GROUP and LEVEL cannot be created without target',()=>{assert.equal(validateVisibility('academy','GROUP'),false);assert.equal(validateVisibility('academy','LEVEL'),false);assert.equal(validateVisibility('academy','GROUP',null,'group-a'),true);});
+test('not processed or not approved content is invisible',()=>{for(const [k,v] of [['status','PROCESSING'],['reviewStatus','PENDING'],['publishedAt',null],['deletedAt',new Date()]])assert.equal(canViewVideo({...base,[k]:v},parent),false);});
+test('guardian can see only active group enrollment for linked child',()=>{assert.equal(canViewVideo(base,parent),true);assert.equal(canViewVideo(base,{...parent,activeEnrollments:[{groupId:'group-b',levelId:'level-1'}]}),false);assert.equal(canViewVideo(base,null),false);});
+test('cross-domain group or level never grants access',()=>{assert.equal(canViewVideo(base,{...parent,scope:'women'}),false);assert.equal(canViewVideo({...base,visibility:'LEVEL',levelId:'level-2'},parent),false);});
+test('enrolled visibility only active linked enrollments',()=>{assert.equal(canViewVideo({...base,visibility:'ENROLLED'}, {...parent,activeEnrollments:[]}),false);assert.equal(canViewVideo({...base,visibility:'ENROLLED'}, parent),true);});
+test('academy publicly approved ready content can be viewed anonymously',()=>{assert.equal(canViewVideo({...base,scope:'academy',visibility:'PUBLIC'},null),true);assert.equal(canViewVideo({...base,scope:'women',visibility:'PUBLIC'},null),false);});
+test('private staff views only when scoped and privileged',()=>{assert.equal(canViewVideo(base,{scope:'men',staffAccess:true,activeEnrollments:[]}),true);assert.equal(canViewVideo(base,{scope:'women',staffAccess:true,activeEnrollments:[]}),false);});

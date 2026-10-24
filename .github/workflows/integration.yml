@@ -1,0 +1,44 @@
+name: Synthetic PostgreSQL Integration
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_postgres_only
+          POSTGRES_DB: shams_alkhair_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d shams_alkhair_test"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Scan release for secrets and private student data
+        run: node scripts/release-safety.mjs
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Test full stack on an empty disposable database
+        env:
+          CI_TEST_ONLY: 'YES'
+          PGDATABASE: shams_alkhair_test
+          PGHOST: 127.0.0.1
+          PGPASSWORD: ci_postgres_only
+        run: bash scripts/ci-postgres-integration.sh

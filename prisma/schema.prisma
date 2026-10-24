@@ -1,0 +1,1637 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["core", "hifz_men", "hifz_women", "academy"]
+}
+
+/// Public/reference data and administrative access. No female-student profiles in core.
+model Branch {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  nameAr    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@schema("core")
+}
+
+model Department {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique
+  nameAr    String
+  programs  Program[]
+  createdAt DateTime  @default(now())
+
+  @@schema("core")
+}
+
+model Program {
+  id           String     @id @default(uuid()) @db.Uuid
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id])
+  code         String     @unique
+  nameAr       String
+  active       Boolean    @default(true)
+  levels       Level[]
+
+  @@index([departmentId])
+  @@schema("core")
+}
+
+model Level {
+  id        String  @id @default(uuid()) @db.Uuid
+  programId String  @db.Uuid
+  program   Program @relation(fields: [programId], references: [id])
+  nameAr    String
+  order     Int
+
+  @@unique([programId, order])
+  @@schema("core")
+}
+
+/// Identity and authorization scaffolding; the auth/login UI comes in Phase 2.
+model AppUser {
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String           @unique
+  displayName  String           @default("User")
+  gender       String           @default("UNSPECIFIED")
+  passwordHash String?
+  failedLogins Int              @default(0)
+  lockedUntil  DateTime?
+  sessions     AuthSession[]
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  roles        RoleAssignment[]
+  requested    SensitiveAccessGrant[] @relation("GrantRequester")
+  approved     SensitiveAccessGrant[] @relation("GrantApprover")
+
+  @@schema("core")
+}
+
+model AccessScope {
+  id         String                 @id @default(uuid()) @db.Uuid
+  code       String                 @unique
+  nameAr     String
+  roles      RoleAssignment[]
+  grants     SensitiveAccessGrant[]
+
+  @@schema("core")
+}
+
+model RoleAssignment {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  scopeId   String      @db.Uuid
+  role      String
+  active    Boolean     @default(true)
+  validFrom DateTime    @default(now())
+  validTo   DateTime?
+  user      AppUser     @relation(fields: [userId], references: [id])
+  scope     AccessScope @relation(fields: [scopeId], references: [id])
+
+  @@unique([userId, scopeId, role])
+  @@index([scopeId, role])
+  @@schema("core")
+}
+
+/// A supervisor-approved, expiring grant; manager cannot approve their own request.
+model SensitiveAccessGrant {
+  id          String      @id @default(uuid()) @db.Uuid
+  requesterId String      @db.Uuid
+  approverId  String?     @db.Uuid
+  scopeId     String      @db.Uuid
+  purpose     String
+  requestedAt DateTime    @default(now())
+  approvedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  requester   AppUser     @relation("GrantRequester", fields: [requesterId], references: [id])
+  approver    AppUser?    @relation("GrantApprover", fields: [approverId], references: [id])
+  scope       AccessScope @relation(fields: [scopeId], references: [id])
+
+  @@index([scopeId, requesterId, expiresAt])
+  @@schema("core")
+}
+
+/// Append-only operational record; enforce immutability in database privileges/triggers.
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String?  @db.Uuid
+  action      String
+  scopeCode   String
+  subjectType String
+  subjectId   String?
+  reason      String?
+  occurredAt  DateTime @default(now())
+  metadata    Json?
+
+  @@index([scopeCode, occurredAt])
+  @@schema("core")
+}
+
+/// Private admissions for hifz_men; not stored in core.
+model MenApplication {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  reference          String                  @unique
+  accessTokenHash    String                  @unique
+  fullName           String
+  birthDate          DateTime                @db.Date
+  gender             String
+  phone              String
+  email              String?
+  guardianName       String?
+  guardianPhone      String?
+  guardianEmail      String?
+  programCode String  @default("HIFZ")
+  notes              String?
+  status             String                  @default("PENDING")
+  consentVersion     String
+  privacyConsentAt   DateTime
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  bookings           MenPlacementBooking[]
+
+  @@index([status, createdAt])
+  @@schema("hifz_men")
+}
+
+model MenPlacementSlot {
+  id          String                     @id @default(uuid()) @db.Uuid
+  startsAt    DateTime
+  durationMin Int                        @default(30)
+  capacity    Int                        @default(10)
+  locationAr  String
+  active      Boolean                    @default(true)
+  bookings    MenPlacementBooking[]
+
+  @@index([startsAt, active])
+  @@schema("hifz_men")
+}
+
+model MenPlacementBooking {
+  id            String                  @id @default(uuid()) @db.Uuid
+  applicationId String                  @unique @db.Uuid
+  slotId        String                  @db.Uuid
+  status        String                  @default("BOOKED")
+  bookedAt      DateTime                @default(now())
+  application   MenApplication      @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  slot          MenPlacementSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  result        MenPlacementResult?
+
+  @@index([slotId])
+  @@schema("hifz_men")
+}
+
+model MenPlacementResult {
+  id               String                  @id @default(uuid()) @db.Uuid
+  bookingId        String                  @unique @db.Uuid
+  score            Int?
+  recommendedLevel String?
+  passed           Boolean?
+  teacherNotes     String?
+  evaluatedAt      DateTime                @default(now())
+  booking          MenPlacementBooking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@schema("hifz_men")
+}
+
+/// Private admissions for hifz_women; not stored in core.
+model WomenApplication {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  reference          String                  @unique
+  accessTokenHash    String                  @unique
+  fullName           String
+  birthDate          DateTime                @db.Date
+  gender             String
+  phone              String
+  email              String?
+  guardianName       String?
+  guardianPhone      String?
+  guardianEmail      String?
+  programCode String  @default("HIFZ")
+  notes              String?
+  status             String                  @default("PENDING")
+  consentVersion     String
+  privacyConsentAt   DateTime
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  bookings           WomenPlacementBooking[]
+
+  @@index([status, createdAt])
+  @@schema("hifz_women")
+}
+
+model WomenPlacementSlot {
+  id          String                     @id @default(uuid()) @db.Uuid
+  startsAt    DateTime
+  durationMin Int                        @default(30)
+  capacity    Int                        @default(10)
+  locationAr  String
+  active      Boolean                    @default(true)
+  bookings    WomenPlacementBooking[]
+
+  @@index([startsAt, active])
+  @@schema("hifz_women")
+}
+
+model WomenPlacementBooking {
+  id            String                  @id @default(uuid()) @db.Uuid
+  applicationId String                  @unique @db.Uuid
+  slotId        String                  @db.Uuid
+  status        String                  @default("BOOKED")
+  bookedAt      DateTime                @default(now())
+  application   WomenApplication      @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  slot          WomenPlacementSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  result        WomenPlacementResult?
+
+  @@index([slotId])
+  @@schema("hifz_women")
+}
+
+model WomenPlacementResult {
+  id               String                  @id @default(uuid()) @db.Uuid
+  bookingId        String                  @unique @db.Uuid
+  score            Int?
+  recommendedLevel String?
+  passed           Boolean?
+  teacherNotes     String?
+  evaluatedAt      DateTime                @default(now())
+  booking          WomenPlacementBooking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@schema("hifz_women")
+}
+
+/// Private admissions for academy; not stored in core.
+model AcademyApplication {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  reference          String                  @unique
+  accessTokenHash    String                  @unique
+  fullName           String
+  birthDate          DateTime                @db.Date
+  gender             String
+  phone              String
+  email              String?
+  guardianName       String?
+  guardianPhone      String?
+  guardianEmail      String?
+  department   String
+  programCode String
+  notes              String?
+  status             String                  @default("PENDING")
+  consentVersion     String
+  privacyConsentAt   DateTime
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  bookings           AcademyPlacementBooking[]
+
+  @@index([status, createdAt])
+  @@schema("academy")
+}
+
+model AcademyPlacementSlot {
+  department  String
+  id          String                     @id @default(uuid()) @db.Uuid
+  startsAt    DateTime
+  durationMin Int                        @default(30)
+  capacity    Int                        @default(10)
+  locationAr  String
+  active      Boolean                    @default(true)
+  bookings    AcademyPlacementBooking[]
+
+  @@index([startsAt, active])
+  @@schema("academy")
+}
+
+model AcademyPlacementBooking {
+  id            String                  @id @default(uuid()) @db.Uuid
+  applicationId String                  @unique @db.Uuid
+  slotId        String                  @db.Uuid
+  status        String                  @default("BOOKED")
+  bookedAt      DateTime                @default(now())
+  application   AcademyApplication      @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  slot          AcademyPlacementSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  result        AcademyPlacementResult?
+
+  @@index([slotId])
+  @@schema("academy")
+}
+
+model AcademyPlacementResult {
+  id               String                  @id @default(uuid()) @db.Uuid
+  bookingId        String                  @unique @db.Uuid
+  score            Int?
+  recommendedLevel String?
+  passed           Boolean?
+  teacherNotes     String?
+  evaluatedAt      DateTime                @default(now())
+  booking          AcademyPlacementBooking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@schema("academy")
+}
+
+
+/// General site inquiries only. Never put women's admission profiles in core.
+model ContactInquiry {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  email      String?
+  phone      String
+  topic      String
+  message    String
+  consentAt  DateTime
+  createdAt  DateTime @default(now())
+  handledAt  DateTime?
+
+  @@index([createdAt])
+  @@schema("core")
+}
+
+/// Revocable, server-side session: only SHA-256 of opaque cookie stored in DB.
+model AuthSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+  @@schema("core")
+}
+
+model MenStudent {
+  stage6Invoices MenInvoice[]
+  stage6Certificates MenCertificate[]
+  stage6Exams MenExam[]
+  stage6Reviews MenReviewTask[]
+  stage6Awards MenAward[]
+  id String @id @default(uuid()) @db.Uuid
+  applicationId String? @unique @db.Uuid
+  userId String? @db.Uuid
+  fullName String
+  birthDate DateTime @db.Date
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollments MenEnrollment[]
+  credentials MenQrCredential[]
+  attendances MenAttendance[]
+  guardians MenGuardianLink[]
+  learningRecords MenLearningRecord[]
+  recitationConsents MenRecitationConsent[]
+  recitationAttempts MenRecitationAttempt[]
+  reports MenStudentReport[]
+  reportPreferences MenReportPreference[]
+  messages MenFamilyMessage[]
+  notifications MenFamilyNotification[]
+  @@index([fullName])
+  @@schema("hifz_men")
+}
+model MenGuardianLink {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  userId String @db.Uuid
+  relationship String @default("PARENT")
+  active Boolean @default(true)
+  student MenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@unique([studentId, userId])
+  @@index([userId, active])
+  @@schema("hifz_men")
+}
+model MenClassGroup {
+  stage6Schedules MenWeeklySchedule[]
+  videos MenVideo[]
+  id String @id @default(uuid()) @db.Uuid
+  nameAr String
+  levelId String? @db.Uuid
+  capacity Int @default(25)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  enrollments MenEnrollment[]
+  teachers MenTeacherAssignment[]
+  sessions MenLessonSession[]
+  @@schema("hifz_men")
+}
+model MenEnrollment {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  joinedAt DateTime @default(now())
+  student MenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  group MenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([studentId, groupId])
+  @@index([groupId, active])
+  @@schema("hifz_men")
+}
+model MenTeacherAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  group MenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([userId, groupId])
+  @@index([userId, active])
+  @@schema("hifz_men")
+}
+model MenLessonSession {
+  id String @id @default(uuid()) @db.Uuid
+  groupId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  status String @default("PLANNED")
+  group MenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  attendances MenAttendance[]
+  @@unique([groupId, startsAt])
+  @@index([startsAt])
+  @@schema("hifz_men")
+}
+model MenQrCredential {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  tokenHash String @unique
+  issuedAt DateTime @default(now())
+  revokedAt DateTime?
+  student MenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@index([studentId, revokedAt])
+  @@schema("hifz_men")
+}
+model MenAttendance {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  sessionId String @db.Uuid
+  status String
+  markedAt DateTime @default(now())
+  recordedBy String @db.Uuid
+  reason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student MenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session MenLessonSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  @@unique([studentId, sessionId])
+  @@index([sessionId, status])
+  @@schema("hifz_men")
+}
+
+model WomenStudent {
+  stage6Invoices WomenInvoice[]
+  stage6Certificates WomenCertificate[]
+  stage6Exams WomenExam[]
+  stage6Reviews WomenReviewTask[]
+  stage6Awards WomenAward[]
+  id String @id @default(uuid()) @db.Uuid
+  applicationId String? @unique @db.Uuid
+  userId String? @db.Uuid
+  fullName String
+  birthDate DateTime @db.Date
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollments WomenEnrollment[]
+  credentials WomenQrCredential[]
+  attendances WomenAttendance[]
+  guardians WomenGuardianLink[]
+  learningRecords WomenLearningRecord[]
+  recitationConsents WomenRecitationConsent[]
+  recitationAttempts WomenRecitationAttempt[]
+  reports WomenStudentReport[]
+  reportPreferences WomenReportPreference[]
+  messages WomenFamilyMessage[]
+  notifications WomenFamilyNotification[]
+  @@index([fullName])
+  @@schema("hifz_women")
+}
+model WomenGuardianLink {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  userId String @db.Uuid
+  relationship String @default("PARENT")
+  active Boolean @default(true)
+  student WomenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@unique([studentId, userId])
+  @@index([userId, active])
+  @@schema("hifz_women")
+}
+model WomenClassGroup {
+  stage6Schedules WomenWeeklySchedule[]
+  videos WomenVideo[]
+  id String @id @default(uuid()) @db.Uuid
+  nameAr String
+  levelId String? @db.Uuid
+  capacity Int @default(25)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  enrollments WomenEnrollment[]
+  teachers WomenTeacherAssignment[]
+  sessions WomenLessonSession[]
+  @@schema("hifz_women")
+}
+model WomenEnrollment {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  joinedAt DateTime @default(now())
+  student WomenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  group WomenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([studentId, groupId])
+  @@index([groupId, active])
+  @@schema("hifz_women")
+}
+model WomenTeacherAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  group WomenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([userId, groupId])
+  @@index([userId, active])
+  @@schema("hifz_women")
+}
+model WomenLessonSession {
+  id String @id @default(uuid()) @db.Uuid
+  groupId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  status String @default("PLANNED")
+  group WomenClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  attendances WomenAttendance[]
+  @@unique([groupId, startsAt])
+  @@index([startsAt])
+  @@schema("hifz_women")
+}
+model WomenQrCredential {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  tokenHash String @unique
+  issuedAt DateTime @default(now())
+  revokedAt DateTime?
+  student WomenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@index([studentId, revokedAt])
+  @@schema("hifz_women")
+}
+model WomenAttendance {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  sessionId String @db.Uuid
+  status String
+  markedAt DateTime @default(now())
+  recordedBy String @db.Uuid
+  reason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student WomenStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session WomenLessonSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  @@unique([studentId, sessionId])
+  @@index([sessionId, status])
+  @@schema("hifz_women")
+}
+
+model AcademyStudent {
+  stage6Invoices AcademyInvoice[]
+  stage6Certificates AcademyCertificate[]
+  stage6Exams AcademyExam[]
+  stage6Reviews AcademyReviewTask[]
+  stage6Awards AcademyAward[]
+  id String @id @default(uuid()) @db.Uuid
+  applicationId String? @unique @db.Uuid
+  userId String? @db.Uuid
+  fullName String
+  birthDate DateTime @db.Date
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enrollments AcademyEnrollment[]
+  credentials AcademyQrCredential[]
+  attendances AcademyAttendance[]
+  guardians AcademyGuardianLink[]
+  learningRecords AcademyLearningRecord[]
+  recitationConsents AcademyRecitationConsent[]
+  recitationAttempts AcademyRecitationAttempt[]
+  reports AcademyStudentReport[]
+  reportPreferences AcademyReportPreference[]
+  messages AcademyFamilyMessage[]
+  notifications AcademyFamilyNotification[]
+  @@index([fullName])
+  @@schema("academy")
+}
+model AcademyGuardianLink {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  userId String @db.Uuid
+  relationship String @default("PARENT")
+  active Boolean @default(true)
+  student AcademyStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@unique([studentId, userId])
+  @@index([userId, active])
+  @@schema("academy")
+}
+model AcademyClassGroup {
+  stage6Schedules AcademyWeeklySchedule[]
+  videos AcademyVideo[]
+  id String @id @default(uuid()) @db.Uuid
+  department String
+  nameAr String
+  levelId String? @db.Uuid
+  capacity Int @default(25)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  enrollments AcademyEnrollment[]
+  teachers AcademyTeacherAssignment[]
+  sessions AcademyLessonSession[]
+  @@schema("academy")
+}
+model AcademyEnrollment {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  joinedAt DateTime @default(now())
+  student AcademyStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  group AcademyClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([studentId, groupId])
+  @@index([groupId, active])
+  @@schema("academy")
+}
+model AcademyTeacherAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  groupId String @db.Uuid
+  active Boolean @default(true)
+  group AcademyClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@unique([userId, groupId])
+  @@index([userId, active])
+  @@schema("academy")
+}
+model AcademyLessonSession {
+  id String @id @default(uuid()) @db.Uuid
+  groupId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  status String @default("PLANNED")
+  group AcademyClassGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  attendances AcademyAttendance[]
+  @@unique([groupId, startsAt])
+  @@index([startsAt])
+  @@schema("academy")
+}
+model AcademyQrCredential {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  tokenHash String @unique
+  issuedAt DateTime @default(now())
+  revokedAt DateTime?
+  student AcademyStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  @@index([studentId, revokedAt])
+  @@schema("academy")
+}
+model AcademyAttendance {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  sessionId String @db.Uuid
+  status String
+  markedAt DateTime @default(now())
+  recordedBy String @db.Uuid
+  reason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student AcademyStudent @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session AcademyLessonSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  @@unique([studentId, sessionId])
+  @@index([sessionId, status])
+  @@schema("academy")
+}
+
+/// Phase 3: progress is always private to this scope. Scores indicate teacher judgment, not AI grading.
+model MenLearningRecord {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ teacherId String @db.Uuid
+ activity String // NEW_MEMORIZATION | REVIEW
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ mastery Int // 0..100; constraints-stage3.sql enforces bounds
+ memoryErrors Int @default(0)
+ tajweedErrors Int @default(0)
+ makharijErrors Int @default(0)
+ teacherNote String?
+ assessedAt DateTime @default(now())
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId, assessedAt])
+ @@index([groupId, assessedAt])
+ @@schema("hifz_men")
+}
+
+model MenStudentReport {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ periodType String // WEEKLY | MONTHLY
+ periodStart DateTime @db.Date
+ periodEnd DateTime @db.Date // exclusive
+ status String @default("DRAFT") // DRAFT | PUBLISHED
+ snapshot Json
+ teacherComment String?
+ generatedBy String? @db.Uuid
+ approvedBy String? @db.Uuid
+ publishedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ deliveries MenReportDelivery[]
+ @@unique([studentId, periodType, periodStart])
+ @@index([status,periodStart])
+ @@schema("hifz_men")
+}
+
+model MenReportPreference {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ guardianUserId String @db.Uuid
+ weekly Boolean @default(true)
+ monthly Boolean @default(true)
+ inApp Boolean @default(true)
+ email Boolean @default(false)
+ whatsapp Boolean @default(false) // reserved until verified opt-in/template setup
+ requireTeacherApproval Boolean @default(true)
+ emailOptInAt DateTime?
+ whatsappOptInAt DateTime?
+ updatedAt DateTime @updatedAt
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,guardianUserId])
+ @@index([guardianUserId])
+ @@schema("hifz_men")
+}
+
+model MenReportDelivery {
+ id String @id @default(uuid()) @db.Uuid
+ reportId String @db.Uuid
+ guardianUserId String @db.Uuid
+ method String // IN_APP | EMAIL
+ status String @default("QUEUED") // QUEUED | SENT | FAILED
+ attempts Int @default(0)
+ processingAt DateTime?
+ providerId String?
+ lastError String?
+ deliveredAt DateTime?
+ createdAt DateTime @default(now())
+ report MenStudentReport @relation(fields:[reportId],references:[id],onDelete:Restrict)
+ @@unique([reportId,guardianUserId,method])
+ @@index([status,createdAt])
+ @@schema("hifz_men")
+}
+
+model MenFamilyMessage {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ senderId String @db.Uuid
+ recipientId String @db.Uuid
+ body String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@index([recipientId,readAt])
+ @@schema("hifz_men")
+}
+
+model MenFamilyNotification {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ recipientId String @db.Uuid
+ kind String
+ title String
+ text String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([recipientId,createdAt])
+ @@schema("hifz_men")
+}
+
+/// Phase 3: progress is always private to this scope. Scores indicate teacher judgment, not AI grading.
+model WomenLearningRecord {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ teacherId String @db.Uuid
+ activity String // NEW_MEMORIZATION | REVIEW
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ mastery Int // 0..100; constraints-stage3.sql enforces bounds
+ memoryErrors Int @default(0)
+ tajweedErrors Int @default(0)
+ makharijErrors Int @default(0)
+ teacherNote String?
+ assessedAt DateTime @default(now())
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId, assessedAt])
+ @@index([groupId, assessedAt])
+ @@schema("hifz_women")
+}
+
+model WomenStudentReport {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ periodType String // WEEKLY | MONTHLY
+ periodStart DateTime @db.Date
+ periodEnd DateTime @db.Date // exclusive
+ status String @default("DRAFT") // DRAFT | PUBLISHED
+ snapshot Json
+ teacherComment String?
+ generatedBy String? @db.Uuid
+ approvedBy String? @db.Uuid
+ publishedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ deliveries WomenReportDelivery[]
+ @@unique([studentId, periodType, periodStart])
+ @@index([status,periodStart])
+ @@schema("hifz_women")
+}
+
+model WomenReportPreference {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ guardianUserId String @db.Uuid
+ weekly Boolean @default(true)
+ monthly Boolean @default(true)
+ inApp Boolean @default(true)
+ email Boolean @default(false)
+ whatsapp Boolean @default(false) // reserved until verified opt-in/template setup
+ requireTeacherApproval Boolean @default(true)
+ emailOptInAt DateTime?
+ whatsappOptInAt DateTime?
+ updatedAt DateTime @updatedAt
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,guardianUserId])
+ @@index([guardianUserId])
+ @@schema("hifz_women")
+}
+
+model WomenReportDelivery {
+ id String @id @default(uuid()) @db.Uuid
+ reportId String @db.Uuid
+ guardianUserId String @db.Uuid
+ method String // IN_APP | EMAIL
+ status String @default("QUEUED") // QUEUED | SENT | FAILED
+ attempts Int @default(0)
+ processingAt DateTime?
+ providerId String?
+ lastError String?
+ deliveredAt DateTime?
+ createdAt DateTime @default(now())
+ report WomenStudentReport @relation(fields:[reportId],references:[id],onDelete:Restrict)
+ @@unique([reportId,guardianUserId,method])
+ @@index([status,createdAt])
+ @@schema("hifz_women")
+}
+
+model WomenFamilyMessage {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ senderId String @db.Uuid
+ recipientId String @db.Uuid
+ body String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@index([recipientId,readAt])
+ @@schema("hifz_women")
+}
+
+model WomenFamilyNotification {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ recipientId String @db.Uuid
+ kind String
+ title String
+ text String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([recipientId,createdAt])
+ @@schema("hifz_women")
+}
+
+/// Phase 3: progress is always private to this scope. Scores indicate teacher judgment, not AI grading.
+model AcademyLearningRecord {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ teacherId String @db.Uuid
+ activity String // NEW_MEMORIZATION | REVIEW
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ mastery Int // 0..100; constraints-stage3.sql enforces bounds
+ memoryErrors Int @default(0)
+ tajweedErrors Int @default(0)
+ makharijErrors Int @default(0)
+ teacherNote String?
+ assessedAt DateTime @default(now())
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId, assessedAt])
+ @@index([groupId, assessedAt])
+ @@schema("academy")
+}
+
+model AcademyStudentReport {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ periodType String // WEEKLY | MONTHLY
+ periodStart DateTime @db.Date
+ periodEnd DateTime @db.Date // exclusive
+ status String @default("DRAFT") // DRAFT | PUBLISHED
+ snapshot Json
+ teacherComment String?
+ generatedBy String? @db.Uuid
+ approvedBy String? @db.Uuid
+ publishedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ deliveries AcademyReportDelivery[]
+ @@unique([studentId, periodType, periodStart])
+ @@index([status,periodStart])
+ @@schema("academy")
+}
+
+model AcademyReportPreference {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ guardianUserId String @db.Uuid
+ weekly Boolean @default(true)
+ monthly Boolean @default(true)
+ inApp Boolean @default(true)
+ email Boolean @default(false)
+ whatsapp Boolean @default(false) // reserved until verified opt-in/template setup
+ requireTeacherApproval Boolean @default(true)
+ emailOptInAt DateTime?
+ whatsappOptInAt DateTime?
+ updatedAt DateTime @updatedAt
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,guardianUserId])
+ @@index([guardianUserId])
+ @@schema("academy")
+}
+
+model AcademyReportDelivery {
+ id String @id @default(uuid()) @db.Uuid
+ reportId String @db.Uuid
+ guardianUserId String @db.Uuid
+ method String // IN_APP | EMAIL
+ status String @default("QUEUED") // QUEUED | SENT | FAILED
+ attempts Int @default(0)
+ processingAt DateTime?
+ providerId String?
+ lastError String?
+ deliveredAt DateTime?
+ createdAt DateTime @default(now())
+ report AcademyStudentReport @relation(fields:[reportId],references:[id],onDelete:Restrict)
+ @@unique([reportId,guardianUserId,method])
+ @@index([status,createdAt])
+ @@schema("academy")
+}
+
+model AcademyFamilyMessage {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ senderId String @db.Uuid
+ recipientId String @db.Uuid
+ body String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@index([recipientId,readAt])
+ @@schema("academy")
+}
+
+model AcademyFamilyNotification {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ recipientId String @db.Uuid
+ kind String
+ title String
+ text String
+ readAt DateTime?
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([recipientId,createdAt])
+ @@schema("academy")
+}
+
+/// Phase 4: consent records are scoped to the student and can be revoked.
+model MenRecitationConsent {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ grantedBy String @db.Uuid
+ acceptedPrivacyVersion String
+ grantedAt DateTime @default(now())
+ revokedAt DateTime?
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,grantedBy])
+ @@index([studentId,revokedAt])
+ @@schema("hifz_men")
+}
+
+/// Stage 4 uploads never contain a public URL: audio lives in a private scoped object store.
+model MenRecitationAttempt {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ uploadedBy String @db.Uuid
+ groupId String? @db.Uuid
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ sourceEdition String @default("quran-foundation-uthmani")
+ storageKey String @unique
+ contentType String
+ byteSize Int
+ sha256 String
+ state String @default("QUEUED") // QUEUED | PROCESSING | NEEDS_REVIEW | REVIEWED | FAILED | DELETED
+ attempts Int @default(0)
+ processingStartedAt DateTime?
+ provider String?
+ transcript String?
+ alignment Json?
+ provisionalMatch Int? // word agreement heuristic, NEVER tajweed assessment
+ failureCode String?
+ submittedAt DateTime @default(now())
+ processedAt DateTime?
+ reviewedAt DateTime?
+ reviewedBy String? @db.Uuid
+ teacherMastery Int?
+ teacherMemoryErrors Int?
+ teacherTajweedErrors Int?
+ teacherMakharijErrors Int?
+ teacherComment String?
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,submittedAt])
+ @@index([state,submittedAt])
+ @@schema("hifz_men")
+}
+
+/// Phase 4: consent records are scoped to the student and can be revoked.
+model WomenRecitationConsent {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ grantedBy String @db.Uuid
+ acceptedPrivacyVersion String
+ grantedAt DateTime @default(now())
+ revokedAt DateTime?
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,grantedBy])
+ @@index([studentId,revokedAt])
+ @@schema("hifz_women")
+}
+
+/// Stage 4 uploads never contain a public URL: audio lives in a private scoped object store.
+model WomenRecitationAttempt {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ uploadedBy String @db.Uuid
+ groupId String? @db.Uuid
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ sourceEdition String @default("quran-foundation-uthmani")
+ storageKey String @unique
+ contentType String
+ byteSize Int
+ sha256 String
+ state String @default("QUEUED") // QUEUED | PROCESSING | NEEDS_REVIEW | REVIEWED | FAILED | DELETED
+ attempts Int @default(0)
+ processingStartedAt DateTime?
+ provider String?
+ transcript String?
+ alignment Json?
+ provisionalMatch Int? // word agreement heuristic, NEVER tajweed assessment
+ failureCode String?
+ submittedAt DateTime @default(now())
+ processedAt DateTime?
+ reviewedAt DateTime?
+ reviewedBy String? @db.Uuid
+ teacherMastery Int?
+ teacherMemoryErrors Int?
+ teacherTajweedErrors Int?
+ teacherMakharijErrors Int?
+ teacherComment String?
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,submittedAt])
+ @@index([state,submittedAt])
+ @@schema("hifz_women")
+}
+
+/// Phase 4: consent records are scoped to the student and can be revoked.
+model AcademyRecitationConsent {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ grantedBy String @db.Uuid
+ acceptedPrivacyVersion String
+ grantedAt DateTime @default(now())
+ revokedAt DateTime?
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@unique([studentId,grantedBy])
+ @@index([studentId,revokedAt])
+ @@schema("academy")
+}
+
+/// Stage 4 uploads never contain a public URL: audio lives in a private scoped object store.
+model AcademyRecitationAttempt {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ uploadedBy String @db.Uuid
+ groupId String? @db.Uuid
+ surahNumber Int
+ ayahFrom Int
+ ayahTo Int
+ sourceEdition String @default("quran-foundation-uthmani")
+ storageKey String @unique
+ contentType String
+ byteSize Int
+ sha256 String
+ state String @default("QUEUED") // QUEUED | PROCESSING | NEEDS_REVIEW | REVIEWED | FAILED | DELETED
+ attempts Int @default(0)
+ processingStartedAt DateTime?
+ provider String?
+ transcript String?
+ alignment Json?
+ provisionalMatch Int? // word agreement heuristic, NEVER tajweed assessment
+ failureCode String?
+ submittedAt DateTime @default(now())
+ processedAt DateTime?
+ reviewedAt DateTime?
+ reviewedBy String? @db.Uuid
+ teacherMastery Int?
+ teacherMemoryErrors Int?
+ teacherTajweedErrors Int?
+ teacherMakharijErrors Int?
+ teacherComment String?
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,submittedAt])
+ @@index([state,submittedAt])
+ @@schema("academy")
+}
+
+/// Stage 5: strictly isolated Stream metadata and private-by-default playback.
+model MenVideo {
+ id               String   @id @default(uuid()) @db.Uuid
+ title            String
+ description      String?  @db.Text
+ category         String   @default("LESSON") // LESSON | QURAN | NOOR_BAYAN | TAJWEED | IJAZA | ACTIVITY
+ levelId          String?  @db.Uuid
+ groupId          String?  @db.Uuid
+ visibility       String   @default("ENROLLED") // PUBLIC | ENROLLED | LEVEL | GROUP
+ status           String   @default("UPLOADING") // UPLOADING | PROCESSING | READY | ERROR
+ reviewStatus     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+ uploadedBy       String   @db.Uuid
+ reviewedBy       String?  @db.Uuid
+ reviewedAt       DateTime?
+ providerUid      String   @unique @db.VarChar(32)
+ durationSeconds  Float?
+ uploadedAt       DateTime @default(now())
+ publishedAt      DateTime?
+ deletedAt        DateTime?
+ createdAt        DateTime @default(now())
+ updatedAt        DateTime @updatedAt
+ group            MenClassGroup? @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([visibility,status,reviewStatus,publishedAt])
+ @@index([groupId,levelId])
+ @@index([uploadedBy,createdAt])
+ @@schema("hifz_men")
+}
+
+/// Stage 5: strictly isolated Stream metadata and private-by-default playback.
+model WomenVideo {
+ id               String   @id @default(uuid()) @db.Uuid
+ title            String
+ description      String?  @db.Text
+ category         String   @default("LESSON") // LESSON | QURAN | NOOR_BAYAN | TAJWEED | IJAZA | ACTIVITY
+ levelId          String?  @db.Uuid
+ groupId          String?  @db.Uuid
+ visibility       String   @default("ENROLLED") // PUBLIC | ENROLLED | LEVEL | GROUP
+ status           String   @default("UPLOADING") // UPLOADING | PROCESSING | READY | ERROR
+ reviewStatus     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+ uploadedBy       String   @db.Uuid
+ reviewedBy       String?  @db.Uuid
+ reviewedAt       DateTime?
+ providerUid      String   @unique @db.VarChar(32)
+ durationSeconds  Float?
+ uploadedAt       DateTime @default(now())
+ publishedAt      DateTime?
+ deletedAt        DateTime?
+ createdAt        DateTime @default(now())
+ updatedAt        DateTime @updatedAt
+ group            WomenClassGroup? @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([visibility,status,reviewStatus,publishedAt])
+ @@index([groupId,levelId])
+ @@index([uploadedBy,createdAt])
+ @@schema("hifz_women")
+}
+
+/// Stage 5: strictly isolated Stream metadata and private-by-default playback.
+model AcademyVideo {
+ id               String   @id @default(uuid()) @db.Uuid
+ title            String
+ description      String?  @db.Text
+ category         String   @default("LESSON") // LESSON | QURAN | NOOR_BAYAN | TAJWEED | IJAZA | ACTIVITY
+ levelId          String?  @db.Uuid
+ groupId          String?  @db.Uuid
+ visibility       String   @default("ENROLLED") // PUBLIC | ENROLLED | LEVEL | GROUP
+ status           String   @default("UPLOADING") // UPLOADING | PROCESSING | READY | ERROR
+ reviewStatus     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+ uploadedBy       String   @db.Uuid
+ reviewedBy       String?  @db.Uuid
+ reviewedAt       DateTime?
+ providerUid      String   @unique @db.VarChar(32)
+ durationSeconds  Float?
+ uploadedAt       DateTime @default(now())
+ publishedAt      DateTime?
+ deletedAt        DateTime?
+ createdAt        DateTime @default(now())
+ updatedAt        DateTime @updatedAt
+ group            AcademyClassGroup? @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([visibility,status,reviewStatus,publishedAt])
+ @@index([groupId,levelId])
+ @@index([uploadedBy,createdAt])
+ @@schema("academy")
+}
+
+/// Stage 6: issued invoices and recorded offline payments (EGP minor units). No payment gateway.
+model MenInvoice {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ number String @unique @db.VarChar(40)
+ title String @db.VarChar(160)
+ amountPiasters Int
+ discountPiasters Int @default(0)
+ dueAt DateTime @db.Date
+ voidedAt DateTime?
+ issuedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ payments MenPayment[]
+ @@index([studentId,dueAt])
+ @@schema("hifz_men")
+}
+model MenPayment {
+ id String @id @default(uuid()) @db.Uuid
+ invoiceId String @db.Uuid
+ receiptNo String @unique @db.VarChar(45)
+ idempotencyKey String @unique @db.Uuid
+ amountPiasters Int
+ method String // CASH | BANK_TRANSFER | WALLET_MANUAL
+ reference String? @db.VarChar(150)
+ recordedBy String @db.Uuid
+ receivedAt DateTime @default(now())
+ invoice MenInvoice @relation(fields:[invoiceId],references:[id],onDelete:Restrict)
+ @@index([invoiceId,receivedAt])
+ @@schema("hifz_men")
+}
+/// Public code is unguessable and not a login token; all sensitive details are omitted from public verification.
+model MenCertificate {
+ verificationConsentAt DateTime?
+ verificationConsentBy String? @db.Uuid
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ serial String @unique @db.VarChar(50)
+ verifyCode String @unique @db.VarChar(64)
+ kind String // TAJWEED | HIFZ | IJAZA_QURAN | IJAZA_NOOR_BAYAN
+ courseTitle String @db.VarChar(160)
+ publicVerification Boolean @default(false)
+ approvedBy String? @db.Uuid
+ approvedAt DateTime?
+ issuerId String @db.Uuid
+ issuedAt DateTime @default(now())
+ revokedAt DateTime?
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ sanad MenSanadEntry[]
+ @@index([studentId,issuedAt])
+ @@schema("hifz_men")
+}
+model MenSanadEntry {
+ id String @id @default(uuid()) @db.Uuid
+ certificateId String @db.Uuid
+ position Int
+ scholarName String @db.VarChar(200)
+ certificate MenCertificate @relation(fields:[certificateId],references:[id],onDelete:Restrict)
+ @@unique([certificateId,position])
+ @@schema("hifz_men")
+}
+model MenExam {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ kind String // PLACEMENT | HIFZ | TAJWEED | WRITTEN
+ title String @db.VarChar(160)
+ score Int
+ total Int
+ notes String? @db.VarChar(2000)
+ assessedBy String @db.Uuid
+ assessedAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,assessedAt])
+ @@schema("hifz_men")
+}
+model MenReviewTask {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ surah Int
+ fromAyah Int
+ toAyah Int
+ dueAt DateTime @db.Date
+ intervalDays Int @default(1)
+ lastMastery Int?
+ completedAt DateTime?
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,dueAt,completedAt])
+ @@schema("hifz_men")
+}
+model MenAward {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ points Int
+ reason String @db.VarChar(250)
+ awardedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student MenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@schema("hifz_men")
+}
+/// Meeting time in minutes since midnight (local Egypt time). SQL exclusion constraints prevent overlaps.
+model MenWeeklySchedule {
+ id String @id @default(uuid()) @db.Uuid
+ groupId String @db.Uuid
+ weekday Int // 0 Sunday .. 6 Saturday
+ fromMinute Int
+ toMinute Int
+ roomCode String @db.VarChar(64)
+ teacherId String @db.Uuid
+ active Boolean @default(true)
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ group MenClassGroup @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([weekday,fromMinute,toMinute])
+ @@index([teacherId,weekday])
+ @@schema("hifz_men")
+}
+
+/// Stage 6: issued invoices and recorded offline payments (EGP minor units). No payment gateway.
+model WomenInvoice {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ number String @unique @db.VarChar(40)
+ title String @db.VarChar(160)
+ amountPiasters Int
+ discountPiasters Int @default(0)
+ dueAt DateTime @db.Date
+ voidedAt DateTime?
+ issuedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ payments WomenPayment[]
+ @@index([studentId,dueAt])
+ @@schema("hifz_women")
+}
+model WomenPayment {
+ id String @id @default(uuid()) @db.Uuid
+ invoiceId String @db.Uuid
+ receiptNo String @unique @db.VarChar(45)
+ idempotencyKey String @unique @db.Uuid
+ amountPiasters Int
+ method String // CASH | BANK_TRANSFER | WALLET_MANUAL
+ reference String? @db.VarChar(150)
+ recordedBy String @db.Uuid
+ receivedAt DateTime @default(now())
+ invoice WomenInvoice @relation(fields:[invoiceId],references:[id],onDelete:Restrict)
+ @@index([invoiceId,receivedAt])
+ @@schema("hifz_women")
+}
+/// Public code is unguessable and not a login token; all sensitive details are omitted from public verification.
+model WomenCertificate {
+ verificationConsentAt DateTime?
+ verificationConsentBy String? @db.Uuid
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ serial String @unique @db.VarChar(50)
+ verifyCode String @unique @db.VarChar(64)
+ kind String // TAJWEED | HIFZ | IJAZA_QURAN | IJAZA_NOOR_BAYAN
+ courseTitle String @db.VarChar(160)
+ publicVerification Boolean @default(false)
+ approvedBy String? @db.Uuid
+ approvedAt DateTime?
+ issuerId String @db.Uuid
+ issuedAt DateTime @default(now())
+ revokedAt DateTime?
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ sanad WomenSanadEntry[]
+ @@index([studentId,issuedAt])
+ @@schema("hifz_women")
+}
+model WomenSanadEntry {
+ id String @id @default(uuid()) @db.Uuid
+ certificateId String @db.Uuid
+ position Int
+ scholarName String @db.VarChar(200)
+ certificate WomenCertificate @relation(fields:[certificateId],references:[id],onDelete:Restrict)
+ @@unique([certificateId,position])
+ @@schema("hifz_women")
+}
+model WomenExam {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ kind String // PLACEMENT | HIFZ | TAJWEED | WRITTEN
+ title String @db.VarChar(160)
+ score Int
+ total Int
+ notes String? @db.VarChar(2000)
+ assessedBy String @db.Uuid
+ assessedAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,assessedAt])
+ @@schema("hifz_women")
+}
+model WomenReviewTask {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ surah Int
+ fromAyah Int
+ toAyah Int
+ dueAt DateTime @db.Date
+ intervalDays Int @default(1)
+ lastMastery Int?
+ completedAt DateTime?
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,dueAt,completedAt])
+ @@schema("hifz_women")
+}
+model WomenAward {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ points Int
+ reason String @db.VarChar(250)
+ awardedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student WomenStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@schema("hifz_women")
+}
+/// Meeting time in minutes since midnight (local Egypt time). SQL exclusion constraints prevent overlaps.
+model WomenWeeklySchedule {
+ id String @id @default(uuid()) @db.Uuid
+ groupId String @db.Uuid
+ weekday Int // 0 Sunday .. 6 Saturday
+ fromMinute Int
+ toMinute Int
+ roomCode String @db.VarChar(64)
+ teacherId String @db.Uuid
+ active Boolean @default(true)
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ group WomenClassGroup @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([weekday,fromMinute,toMinute])
+ @@index([teacherId,weekday])
+ @@schema("hifz_women")
+}
+
+/// Stage 6: issued invoices and recorded offline payments (EGP minor units). No payment gateway.
+model AcademyInvoice {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ number String @unique @db.VarChar(40)
+ title String @db.VarChar(160)
+ amountPiasters Int
+ discountPiasters Int @default(0)
+ dueAt DateTime @db.Date
+ voidedAt DateTime?
+ issuedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ payments AcademyPayment[]
+ @@index([studentId,dueAt])
+ @@schema("academy")
+}
+model AcademyPayment {
+ id String @id @default(uuid()) @db.Uuid
+ invoiceId String @db.Uuid
+ receiptNo String @unique @db.VarChar(45)
+ idempotencyKey String @unique @db.Uuid
+ amountPiasters Int
+ method String // CASH | BANK_TRANSFER | WALLET_MANUAL
+ reference String? @db.VarChar(150)
+ recordedBy String @db.Uuid
+ receivedAt DateTime @default(now())
+ invoice AcademyInvoice @relation(fields:[invoiceId],references:[id],onDelete:Restrict)
+ @@index([invoiceId,receivedAt])
+ @@schema("academy")
+}
+/// Public code is unguessable and not a login token; all sensitive details are omitted from public verification.
+model AcademyCertificate {
+ verificationConsentAt DateTime?
+ verificationConsentBy String? @db.Uuid
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ serial String @unique @db.VarChar(50)
+ verifyCode String @unique @db.VarChar(64)
+ kind String // TAJWEED | HIFZ | IJAZA_QURAN | IJAZA_NOOR_BAYAN
+ courseTitle String @db.VarChar(160)
+ publicVerification Boolean @default(false)
+ approvedBy String? @db.Uuid
+ approvedAt DateTime?
+ issuerId String @db.Uuid
+ issuedAt DateTime @default(now())
+ revokedAt DateTime?
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ sanad AcademySanadEntry[]
+ @@index([studentId,issuedAt])
+ @@schema("academy")
+}
+model AcademySanadEntry {
+ id String @id @default(uuid()) @db.Uuid
+ certificateId String @db.Uuid
+ position Int
+ scholarName String @db.VarChar(200)
+ certificate AcademyCertificate @relation(fields:[certificateId],references:[id],onDelete:Restrict)
+ @@unique([certificateId,position])
+ @@schema("academy")
+}
+model AcademyExam {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ kind String // PLACEMENT | HIFZ | TAJWEED | WRITTEN
+ title String @db.VarChar(160)
+ score Int
+ total Int
+ notes String? @db.VarChar(2000)
+ assessedBy String @db.Uuid
+ assessedAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,assessedAt])
+ @@schema("academy")
+}
+model AcademyReviewTask {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ groupId String @db.Uuid
+ surah Int
+ fromAyah Int
+ toAyah Int
+ dueAt DateTime @db.Date
+ intervalDays Int @default(1)
+ lastMastery Int?
+ completedAt DateTime?
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,dueAt,completedAt])
+ @@schema("academy")
+}
+model AcademyAward {
+ id String @id @default(uuid()) @db.Uuid
+ studentId String @db.Uuid
+ points Int
+ reason String @db.VarChar(250)
+ awardedBy String @db.Uuid
+ createdAt DateTime @default(now())
+ student AcademyStudent @relation(fields:[studentId],references:[id],onDelete:Restrict)
+ @@index([studentId,createdAt])
+ @@schema("academy")
+}
+/// Meeting time in minutes since midnight (local Egypt time). SQL exclusion constraints prevent overlaps.
+model AcademyWeeklySchedule {
+ id String @id @default(uuid()) @db.Uuid
+ groupId String @db.Uuid
+ weekday Int // 0 Sunday .. 6 Saturday
+ fromMinute Int
+ toMinute Int
+ roomCode String @db.VarChar(64)
+ teacherId String @db.Uuid
+ active Boolean @default(true)
+ createdBy String @db.Uuid
+ createdAt DateTime @default(now())
+ group AcademyClassGroup @relation(fields:[groupId],references:[id],onDelete:Restrict)
+ @@index([weekday,fromMinute,toMinute])
+ @@index([teacherId,weekday])
+ @@schema("academy")
+}

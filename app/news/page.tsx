@@ -1,0 +1,2 @@
+import {siteContent} from "@/lib/site-content";
+export default function News(){return <div className="container inner-page"><span className="eyebrow">المستجدات</span><h1>الأخبار والإعلانات</h1><p className="lead">تُنشر هنا إعلانات المدرسة المعتمدة.</p>{siteContent.news.length?<div className="cards">{siteContent.news.map((n,i)=><article className="info-card" key={i}><small>{n.date}</small><h2>{n.title}</h2><p>{n.summary}</p></article>)}</div>:<div className="panel"><p>لا توجد إعلانات منشورة بعد.</p></div>}</div>}

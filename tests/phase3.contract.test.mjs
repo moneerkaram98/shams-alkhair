@@ -1,0 +1,13 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const load=p=>readFileSync(new URL(`../${p}`,import.meta.url),"utf8");
+const schema=load("prisma/schema.prisma");
+test("phase three academic models are physically split into independent schemas",()=>{for(const [prefix,scope] of [["Men","hifz_men"],["Women","hifz_women"],["Academy","academy"]]){for(const type of ["LearningRecord","StudentReport","ReportPreference","ReportDelivery","FamilyMessage","FamilyNotification"]){const start=schema.indexOf(`model ${prefix}${type} {`);assert.ok(start>=0);const end=schema.indexOf("\n}",start);assert.ok(end>start);assert.ok(schema.slice(start,end).includes(`@@schema("${scope}")`));}}});
+test("progress validates verse bounds and authenticated teacher scope",()=>{const x=load("lib/phase3.ts");assert.match(x,/ayahTo>=x.ayahFrom/);assert.match(x,/staffStudentAccess/);assert.match(x,/group:\{teachers:\{some:/);});
+test("parent access requires guardian link or self student account",()=>{const x=load("lib/phase3.ts");assert.match(x,/userId:actor.id,active:true/);assert.match(x,/rolesFor\(actor,code,"PARENT"\)/);assert.match(load("app/api/family/report/route.ts"),/privateFamilyCheck/);});
+test("guardian cannot turn off teacher approval",()=>{const x=load("app/api/family/preferences/route.ts");assert.doesNotMatch(x,/requireTeacherApproval:z.boolean\(\)/);assert.match(load("app/api/staff/report-approval/route.ts"),/staffStudentAccess/);});
+test("report period uniqueness and publish idempotency",()=>{assert.equal((schema.match(/@@unique\(\[studentId, periodType, periodStart\]\)/g)||[]).length,3);assert.match(load("app/api/staff/reports/publish/route.ts"),/status:"DRAFT"/);});
+test("scheduled delivery requires dedicated secret and recipient email opt-in",()=>{const x=load("app/api/jobs/reports/route.ts");assert.match(x,/timingSafeEqual/);assert.match(x,/emailOptInAt/);assert.match(x,/Idempotency-Key/);assert.match(x,/https:\/\/api.resend.com\/emails/);});
+test("message recipient is teacher of linked child or linked guardian",()=>{const x=load("app/api/family/messages/route.ts");assert.match(x,/studentId:v.studentId,active:true/);assert.match(x,/recipientId===actor.id/);assert.match(x,/staffStudentAccess/);});
+test("web report is secure and print-to-PDF enabled",()=>{const x=load("app/api/family/report/route.ts");assert.match(x,/Cache-Control":"private, no-store/);assert.match(x,/window.print\(\)/);assert.match(x,/X-Content-Type-Options/);});

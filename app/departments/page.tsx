@@ -1,0 +1,2 @@
+import Link from "next/link";import {sections} from "@/lib/sections";
+export default function Departments(){return <div className="container inner-page"><span className="eyebrow">أقسام المدرسة</span><h1>البرامج التعليمية</h1><div className="cards">{sections.map(s=><Link className="info-card" href={`/departments/${s.slug}`} key={s.slug}><div className="card-icon">{s.symbol}</div><h2>{s.name}</h2><p>{s.summary}</p><span className="link-text">التفاصيل ←</span></Link>)}</div></div>}

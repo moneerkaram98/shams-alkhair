@@ -1,0 +1,26 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+!.env.example
+*.log
+*.tsbuildinfo
+
+.env.runtime
+
+# Never publish secrets, student records or backups.
+.env.*
+!.env.example
+!.env.runtime.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+uploads/
+recordings/
+backups/
+private-data/

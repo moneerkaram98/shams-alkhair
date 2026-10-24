@@ -1,0 +1,44 @@
+digraph ERD {
+  graph [rankdir=LR, bgcolor="#ffffff", pad="0.4", nodesep="0.42", ranksep="0.78", fontname="DejaVu Sans", label="Shams Alkhair — Phase 1 PostgreSQL ERD", labelloc=t, fontsize=23, fontcolor="#153f37"];
+  node [shape=record, fontname="DejaVu Sans", fontsize=11, style="filled,rounded", color="#9bbaa8", fillcolor="#f7faf8", fontcolor="#153f37", margin=".15,.11"];
+  edge [color="#7b9488", arrowsize=.6, fontname="DejaVu Sans", fontsize=10];
+
+  subgraph cluster_core {
+    label="core"; style="rounded,filled"; color="#bfd0c5"; fillcolor="#ebf3ed";
+    branch [label="{Branch|PK id\lcode unique\l}"];
+    dept [label="{Department|PK id\lcode unique\l}"];
+    program [label="{Program|PK id\lFK departmentId\lcode unique\l}"];
+    level [label="{Level|PK id\lFK programId\lorder\l}"];
+    user [label="{AppUser|PK id\lemail unique\l}"];
+    scope [label="{AccessScope|PK id\lcode unique\l}"];
+    role [label="{RoleAssignment|PK id\lFK userId\lFK scopeId\lrole\l}"];
+    grant [label="{SensitiveAccessGrant|PK id\lFK requesterId\lFK approverId\lFK scopeId\lexpiresAt\l}"];
+    audit [label="{AuditEvent|PK id\lactorId\lscopeCode\loccurredAt\l}"];
+    dept->program;program->level;user->role;scope->role;user->grant;scope->grant;user->audit [style=dashed];
+  }
+  subgraph cluster_men {
+    label="hifz_men"; style="rounded,filled"; color="#bdd3d2"; fillcolor="#e9f2f2";
+    ma [label="{MenApplication|PK id\lreference unique\laccessTokenHash\lPII (private)\l}"];
+    ms [label="{MenPlacementSlot|PK id\lstartsAt\lcapacity\l}"];
+    mb [label="{MenPlacementBooking|PK id\lFK applicationId unique\lFK slotId\l}"];
+    mr [label="{MenPlacementResult|PK id\lFK bookingId unique\l}"];
+    ma->mb;ms->mb;mb->mr;
+  }
+  subgraph cluster_women {
+    label="hifz_women"; style="rounded,filled"; color="#d2c5d7"; fillcolor="#f5eff7";
+    wa [label="{WomenApplication|PK id\lreference unique\laccessTokenHash\lPII (private)\l}"];
+    ws [label="{WomenPlacementSlot|PK id\lstartsAt\lcapacity\l}"];
+    wb [label="{WomenPlacementBooking|PK id\lFK applicationId unique\lFK slotId\l}"];
+    wr [label="{WomenPlacementResult|PK id\lFK bookingId unique\l}"];
+    wa->wb;ws->wb;wb->wr;
+  }
+  subgraph cluster_academy {
+    label="academy"; style="rounded,filled"; color="#e2cfac"; fillcolor="#fbf5e9";
+    aa [label="{AcademyApplication|PK id\ldepartment\lreference unique\lPII (private)\l}"];
+    as [label="{AcademyPlacementSlot|PK id\ldepartment\lstartsAt\lcapacity\l}"];
+    ab [label="{AcademyPlacementBooking|PK id\lFK applicationId unique\lFK slotId\l}"];
+    ar [label="{AcademyPlacementResult|PK id\lFK bookingId unique\l}"];
+    aa->ab;as->ab;ab->ar;
+  }
+  {rank=same;ma;wa;aa;}
+}

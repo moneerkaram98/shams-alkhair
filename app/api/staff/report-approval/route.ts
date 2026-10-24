@@ -1,0 +1,7 @@
+import {NextRequest} from "next/server";
+import {z} from "zod";
+import {getIdentity,fail,privateJson,safeOrigin} from "@/lib/phase2-auth";
+import {phase3Models,scopeSchema,uuid,staffStudentAccess} from "@/lib/phase3";
+import {scopes} from "@/lib/phase2-constants";
+const schema=z.object({scope:scopeSchema,studentId:uuid,requireTeacherApproval:z.boolean()});
+export async function PUT(req:NextRequest){if(!safeOrigin(req))return fail();const b=schema.safeParse(await req.json().catch(()=>null));if(!b.success)return fail(400);const actor=await getIdentity(req);if(!actor)return fail(401);const v=b.data;if(!await staffStudentAccess(actor,v.scope,v.studentId,undefined,"write"))return fail();const d=phase3Models(v.scope);const guardians=await d.guardians.findMany({where:{studentId:v.studentId,active:true},select:{userId:true}});await d.client.$transaction(async(tx:any)=>{for(const guardian of guardians){await tx[`${scopes[v.scope].prefix}ReportPreference`].upsert({where:{studentId_guardianUserId:{studentId:v.studentId,guardianUserId:guardian.userId}},create:{studentId:v.studentId,guardianUserId:guardian.userId,requireTeacherApproval:v.requireTeacherApproval},update:{requireTeacherApproval:v.requireTeacherApproval}});}await tx.auditEvent.create({data:{actorId:actor.id,scopeCode:scopes[v.scope].code,action:"REPORT_APPROVAL_POLICY_UPDATE",subjectType:"STUDENT",subjectId:v.studentId,metadata:{requireTeacherApproval:v.requireTeacherApproval}},select:{id:true}});});return privateJson({success:true});}
