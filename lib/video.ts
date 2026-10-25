@@ -35,7 +35,7 @@ export async function playback(scope:Scope,uid:string){if(!/^[a-f0-9]{32}$/i.tes
 export function webhookValid(raw:string,header:string|null,secret:string){
  if(!header||!secret)return false;const match=/^time=(\d+),sig1=([a-f0-9]{64})$/i.exec(header.trim());if(!match)return false;
  const stamp=Number(match[1]);if(!Number.isSafeInteger(stamp)||Math.abs(Math.floor(Date.now()/1000)-stamp)>300)return false;
- const expected=createHmac("sha256",secret).update(`${stamp}.${raw}`).digest();const actual=Buffer.from(match[2],"hex");return actual.length===expected.length&&timingSafeEqual(expected,actual);
+ const expected=createHmac("sha256",secret).update(`${stamp}.${raw}`).digest();const actual=Buffer.from(match[2],"hex");return actual.length===expected.length&&timingSafeEqual(Uint8Array.from(expected),Uint8Array.from(actual));
 }
 // The viewer's active enrollments are verified in the matching schema; a guardian's other children never grant access.
 export async function viewerContext(actor:Identity|null,scope:Scope){
