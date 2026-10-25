@@ -21,6 +21,9 @@ echo '== Installing and compiling the exact project in a disposable environment 
 npm install --no-audit --no-fund
 npx prisma validate
 npx prisma generate
+# Validate the complete offline security/logic suite before any database changes.
+npm run test:contracts
+npm run verify:release
 # Fresh disposable database only. db push is NOT a substitute for a reviewed
 # production migration history: it exercises the current Prisma model schema.
 npx prisma db push
