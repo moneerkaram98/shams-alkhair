@@ -38,3 +38,25 @@ Do not run `prisma db push` against the persistent school database; it is for di
 
 ## Security limitation
 Prisma `@db.Uuid` defaults are generated client-side; do not insert missing IDs manually. The public source GitHub repository is NOT an appropriate place for connection strings, passwords, child identities or recordings.
+
+
+## October 25 security progress — eight credentials pending user-side activation
+
+The eight *database LOGIN role identities* now exist in the Shams Supabase project, each with exactly one membership in its pre-defined least-privilege role. **All eight roles have NULL database passwords.** They cannot authenticate yet.
+
+Verified by SQL as the database owner:
+- Eight distinct `LOGIN` roles exist; each has exactly one intended NOLOGIN role membership.
+- `rolsuper`, `rolcreatedb`, and `rolcreaterole` are all false.
+- Role/schema access matches the intended department, without men's access to women's schema or the reverse.
+- Supabase security advisors currently report zero lints.
+- The Vercel deployment has no `DATABASE_URL_*` settings and `/api/health` currently returns 503.
+
+Password changes through the connected administration channel were denied; **do not retry via credential tables, commit passwords to GitHub, or share a database owner password in the chat**.
+
+Secure completion requires local administrator action using a dedicated credential setup script:
+1. Use the `postgres.[project-ref]` session-pooler login locally and prompt for the owner's DB password in the terminal, not in chat.
+2. Generate a separate cryptographically strong random password for each restricted `shams_*_login` user.
+3. Test actual connectivity and schema segregation for each account.
+4. Store its database URL via standard input as a Vercel Preview **Secret**, never in CLI process arguments or the repository.
+5. Keep `SCHOOL_LIVE_READY=false`, redeploy preview, and check `/api/health` against all eight clients.
+6. Do not activate production intake without a full synthetic end-to-end and privacy test.
