@@ -5,7 +5,7 @@ import {fail,privateJson} from "@/lib/phase2-auth";
 import {domains,Scope,scopes} from "@/lib/phase2-constants";
 import {phase3Models,parsePeriod,makeSnapshot} from "@/lib/phase3";
 /** Dedicated server-side cron; never called by browsers. Configure CRON_SECRET in your hosting environment. */
-function validCron(req:NextRequest){const expected=process.env.CRON_SECRET||"";const provided=req.headers.get("authorization")||"";if(expected.length<32||!provided.startsWith("Bearer "))return false;const supplied=provided.slice(7);const a=Buffer.from(expected),b=Buffer.from(supplied);return a.length===b.length&&timingSafeEqual(a,b);}
+function validCron(req:NextRequest){const expected=process.env.CRON_SECRET||"";const provided=req.headers.get("authorization")||"";if(expected.length<32||!provided.startsWith("Bearer "))return false;const supplied=provided.slice(7);const a=Uint8Array.from(Buffer.from(expected)),b=Uint8Array.from(Buffer.from(supplied));return a.length===b.length&&timingSafeEqual(a,b);}
 function duePeriods(now:Date){const periods:Array<{type:"WEEKLY"|"MONTHLY";start:string}>=[];
  // UTC date windows for deterministic idempotent reporting. Cron runs at 03:00 UTC.
  if(now.getUTCDay()===1){const start=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-7));periods.push({type:"WEEKLY",start:start.toISOString().slice(0,10)});}
