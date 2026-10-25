@@ -8,8 +8,8 @@ export async function POST(req:NextRequest){if(!safeOrigin(req))return fail();co
  let parsed;try{parsed=schema.safeParse(await req.json())}catch{return fail(400)}if(!parsed.success)return fail(400);
  const v=parsed.data, admin=rolesFor(a,"SCHOOL","SUPER_ADMIN"), supervisor=rolesFor(a,"HIFZ_WOMEN","SUPERVISOR");
  if(v.action==="request"){
-  if(!admin||!v.purpose)return fail();const scope=await db("auth").accessScope.findUnique({where:{code:"HIFZ_WOMEN"}});if(!scope)return fail(500,"يجب إعداد نطاق النساء أولًا");
-  const entry=await db("auth").$transaction(async tx=>{const grant=await tx.sensitiveAccessGrant.create({data:{requesterId:a.id,scopeId:scope.id,purpose:v.purpose}});await tx.auditEvent.create({data:{actorId:a.id,scopeCode:"HIFZ_WOMEN",action:"SENSITIVE_ACCESS_REQUEST",subjectType:"SENSITIVE_ACCESS_GRANT",subjectId:grant.id,reason:v.purpose},select:{id:true}});return grant;});return privateJson({id:entry.id,status:"PENDING"},201);
+  const purpose=v.purpose;if(!admin||!purpose)return fail();const scope=await db("auth").accessScope.findUnique({where:{code:"HIFZ_WOMEN"}});if(!scope)return fail(500,"يجب إعداد نطاق النساء أولًا");
+  const entry=await db("auth").$transaction(async tx=>{const grant=await tx.sensitiveAccessGrant.create({data:{requesterId:a.id,scopeId:scope.id,purpose}});await tx.auditEvent.create({data:{actorId:a.id,scopeCode:"HIFZ_WOMEN",action:"SENSITIVE_ACCESS_REQUEST",subjectType:"SENSITIVE_ACCESS_GRANT",subjectId:grant.id,reason:purpose},select:{id:true}});return grant;});return privateJson({id:entry.id,status:"PENDING"},201);
  }
  if(!v.grantId)return fail(400);const grant=await db("auth").sensitiveAccessGrant.findUnique({where:{id:v.grantId},include:{scope:true}});if(!grant||grant.scope.code!=="HIFZ_WOMEN")return fail(404);
  if(v.action==="approve"){
