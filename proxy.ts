@@ -9,6 +9,8 @@ import type { NextRequest } from "next/server";
  */
 export function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/api/health") return NextResponse.next();
+  if (request.nextUrl.pathname === "/login" && process.env.NODE_ENV === "production" && process.env.SCHOOL_LIVE_READY !== "true")
+    return NextResponse.redirect(new URL("/", request.url));
 
   // Preserve local development and the disposable CI test environment.
   if (process.env.NODE_ENV !== "production" || process.env.SCHOOL_LIVE_READY === "true")
@@ -20,4 +22,4 @@ export function proxy(request: NextRequest) {
   );
 }
 
-export const config = { matcher: "/api/:path*" };
+export const config = { matcher: ["/api/:path*", "/login"] };
