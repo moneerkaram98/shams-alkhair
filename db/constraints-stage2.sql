@@ -1,6 +1,6 @@
 -- Apply once after the phase-2 Prisma migration, as DB owner.
 -- Audit rows must be append-only for all non-owner operational connections.
-CREATE OR REPLACE FUNCTION core.shams_reject_audit_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION core.shams_reject_audit_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $
 BEGIN RAISE EXCEPTION 'Audit history is append-only'; END; $$;
 DROP TRIGGER IF EXISTS audit_is_append_only ON core."AuditEvent";
 CREATE TRIGGER audit_is_append_only BEFORE UPDATE OR DELETE ON core."AuditEvent"
