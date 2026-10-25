@@ -14,5 +14,5 @@ export async function POST(req:NextRequest){if(!safeOrigin(req))return fail();le
   for(const card of cards){await tx[`${scopes[v.scope].prefix}QrCredential`].create({data:{studentId:card.id,tokenHash:hashToken(card.token)}});await tx.auditEvent.create({data:{actorId:g.actor.id,action:"QR_ISSUE",scopeCode:scopes[v.scope].code,subjectType:"STUDENT",subjectId:card.id},select:{id:true}});}
  });
  // The raw token is returned one time only. Never store it in clear text or logs.
- return privateJson({cards:cards.map(c=>({id:c.id,name:c.fullName,token:c.token}))},201);
+ return privateJson({cards:cards.map((c:{id:string;fullName:string;token:string})=>({id:c.id,name:c.fullName,token:c.token}))},201);
 }
