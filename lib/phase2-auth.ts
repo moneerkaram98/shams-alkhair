@@ -11,7 +11,7 @@ export function hashPassword(password:string):string{const salt=randomBytes(16).
 export function verifyPassword(password:string,encoded:string|null):boolean{
  if(!encoded || !/^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/.test(encoded))return false;
  const parts=encoded.split("$");const old=Buffer.from(parts[2],"hex"),candidate=scryptSync(password,parts[1],64);
- return timingSafeEqual(old,candidate);
+ return timingSafeEqual(Uint8Array.from(old),Uint8Array.from(candidate));
 }
 export async function createSession(userId:string){
  const token=newToken(), expiresAt=new Date(Date.now()+ONE_WEEK);
