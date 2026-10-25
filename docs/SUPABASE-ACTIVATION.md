@@ -1,3 +1,13 @@
+## Pooler host confirmed by school administrator (25 October 2026)
+- Verified Supabase Session Pooler host supplied by the user: `aws-1-eu-central-1.pooler.supabase.com`.
+- Session pooler port: `5432`; PostgreSQL database: `postgres`.
+- Username for custom role follows `<role>.ixslanpanembouobgrrc`; the actual restricted Postgres role is `<role>`.
+- Runtime variables: `DATABASE_URL_MEN`, `DATABASE_URL_WOMEN`, `DATABASE_URL_ACADEMY`, `DATABASE_URL_CONTACT`, `DATABASE_URL_AUTH`, `DATABASE_URL_STAFF_MEN`, `DATABASE_URL_STAFF_WOMEN`, `DATABASE_URL_STAFF_ACADEMY`.
+- Use unique 32+ byte randomly generated secrets for every login. Never use the schema owner's `postgres` password in the deployed application. Store the eight complete URLs in Vercel Sensitive/Encrypted environment variables, not in GitHub.
+- **Connection has NOT been established**: provisioning database LOGIN accounts is still pending; API readiness remains 503.
+- Vercel now explicitly stores `SCHOOL_LIVE_READY=false` for preview and production. Do not activate before DB permission tests and privacy signoff.
+- GitHub includes additional UI protection for unactivated registration/contact/placement pages and demo login, but this change must still be redeployed before it is visible.
+
 # Shams Alkhair – Supabase PostgreSQL activation status
 
 ## Completed (25 October 2026)
