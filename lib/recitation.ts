@@ -40,7 +40,7 @@ function storage(scope:Scope){if(!stores[scope]){
 export async function putAudio(scope:Scope,key:string,buf:Buffer,type:string){await storage(scope).send(new PutObjectCommand({Bucket:recordingBucket(scope),Key:key,Body:buf,ContentType:type,ServerSideEncryption:process.env.RECITATION_S3_SSE_KMS_KEY?"aws:kms":"AES256",...(process.env.RECITATION_S3_SSE_KMS_KEY?{SSEKMSKeyId:process.env.RECITATION_S3_SSE_KMS_KEY}:{}),Metadata:{kind:"recitation"}}));}
 export async function getAudio(scope:Scope,key:string){const obj=await storage(scope).send(new GetObjectCommand({Bucket:recordingBucket(scope),Key:key}));const data=await obj.Body?.transformToByteArray();if(!data)throw Error("RECORDING_NOT_FOUND");return Buffer.from(data);}
 export async function deleteAudio(scope:Scope,key:string){await storage(scope).send(new DeleteObjectCommand({Bucket:recordingBucket(scope),Key:key}));}
-export function sha256(data:Buffer){return createHash("sha256").update(data).digest("hex");}
+export function sha256(data:Buffer){return createHash("sha256").update(Uint8Array.from(data)).digest("hex");}
 export const mimeSet=new Set(["audio/webm","audio/ogg","audio/mp4","audio/wav","audio/mpeg"]);
 export function safeAudio(buffer:Buffer,type:string){if(buffer.length===0||buffer.length>12*1024*1024||!mimeSet.has(type))return false;
  const head=buffer.subarray(0,16);return (type==="audio/webm"&&head.subarray(0,4).toString("hex")==="1a45dfa3") || (type==="audio/ogg"&&head.subarray(0,4).toString()==="OggS") || (type==="audio/mp4"&&head.subarray(4,8).toString()==="ftyp") || (type==="audio/wav"&&head.subarray(0,4).toString()==="RIFF"&&head.subarray(8,12).toString()==="WAVE") || (type==="audio/mpeg"&&(head.subarray(0,3).toString()==="ID3" || (head[0]===0xff&&(head[1]&0xe0)===0xe0)));
