@@ -1,0 +1,7 @@
+"use client";
+import {FormEvent,useState} from "react";
+import Link from "next/link";
+export default function LoginForm(){const[email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(false);
+ async function submit(e:FormEvent){e.preventDefault();setLoading(true);setError("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});const data=await r.json();if(!r.ok)throw Error(data.error||"تعذّر الدخول");window.location.href="/dashboard";}catch(e){setError(e instanceof Error?e.message:"حدث خطأ");}finally{setLoading(false);}}
+ return <div className="container inner-page"><span className="eyebrow">لوحة إدارة مدرسة شمس الخير</span><h1>تسجيل الدخول</h1><p className="lead">الدخول متاح للحسابات المعتمدة فقط. معلومات الطالبات تُعرض وفق تصريح محدد المدة وصلاحيات القسم.</p><div className="panel"><form className="form" onSubmit={submit}><div className="form-grid"><label>البريد الإلكتروني<input type="email" required autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)}/></label><label>كلمة المرور<input type="password" required autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label></div>{error&&<p className="form-error" role="alert">{error}</p>}<button className="btn" disabled={loading}>{loading?"جارٍ التحقق":"دخول لوحة التحكم"}</button></form></div><Link href="/">العودة للموقع الرئيسي ←</Link></div>;
+}
