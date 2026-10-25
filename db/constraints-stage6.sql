@@ -1,6 +1,7 @@
 -- Apply as schema owner AFTER stage6 migration; idempotent only if constraints do not yet exist.
 BEGIN;
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions;
 DO $sql$ DECLARE section text; prefix text; t text; BEGIN
 FOR section,prefix IN SELECT * FROM (VALUES ('hifz_men','Men'),('hifz_women','Women'),('academy','Academy')) x(s,p) LOOP
  t := prefix||'Invoice';
