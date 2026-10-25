@@ -6,7 +6,7 @@ FOR section,prefix,staff IN SELECT * FROM (VALUES ('hifz_men','Men','shams_staff
   EXECUTE format('REVOKE ALL ON %I.%I FROM PUBLIC',section,prefix||t);
   EXECUTE format('GRANT SELECT,INSERT,UPDATE ON %I.%I TO %I',section,prefix||t,staff);
   IF t = 'Payment' THEN EXECUTE format('REVOKE UPDATE,DELETE ON %I.%I FROM %I',section,prefix||t,staff); END IF;
-  EXECUTE format('REVOKE ALL ON %I.%I FROM shams_auth,shams_contact',section,prefix||t);
+  EXECUTE format('REVOKE ALL ON %I.%I FROM shams_auth,shams_registration_contact',section,prefix||t);
   IF section <> 'hifz_men' THEN EXECUTE format('REVOKE ALL ON %I.%I FROM shams_staff_men',section,prefix||t);END IF;
   IF section <> 'hifz_women' THEN EXECUTE format('REVOKE ALL ON %I.%I FROM shams_staff_women',section,prefix||t);END IF;
   IF section <> 'academy' THEN EXECUTE format('REVOKE ALL ON %I.%I FROM shams_staff_academy',section,prefix||t);END IF;
