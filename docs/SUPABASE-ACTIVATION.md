@@ -1,3 +1,14 @@
+## Status update — 15 November 2026
+- The independent Supabase Free project had been paused due to inactivity; a restore was requested and verified **ACTIVE_HEALTHY** on 15 November. Free projects can pause again if inactive.
+- Verified **98 private school tables** (11 core, 29 for each of men, women and academy); neither `anon` nor `authenticated` can SELECT any school table.
+- All eight `shams_*_login` roles still have **NULL passwords**; no actual Vercel database connection exists yet.
+- The latest full Next.js preview was deployed successfully with registration, placement, contact and status forms disabled until activation; the login screen redirects away when the school gate is false.
+- A stable public preview URL now points to that deployment: `https://shams-alkhair-full-vipjruj492e-3384.vercel.app`.
+- Preview `APP_ORIGIN` and `NEXT_PUBLIC_SITE_URL` were updated to the stable URL. `SCHOOL_LIVE_READY` remains false for preview and production.
+- The improved administrator-side Windows setup ZIP `shams-secure-db-setup-v2.zip` is available from the ChatGPT file attachment. It generates per-role credentials locally and stores them only as Vercel Preview Secrets.
+- Next: run the local credential setup, verify all eight credentials and Prisma connectivity, then build a NEW preview to consume the newly created secrets. Do not open registration merely because `/api/health` is 200; isolated end-to-end privacy and security tests must pass first.
+
+
 ## Pooler host confirmed by school administrator (25 October 2026)
 - Verified Supabase Session Pooler host supplied by the user: `aws-1-eu-central-1.pooler.supabase.com`.
 - Session pooler port: `5432`; PostgreSQL database: `postgres`.
