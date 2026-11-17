@@ -25,7 +25,14 @@ cleanup(){
 trap cleanup EXIT
 
 table_query="SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname IN ('core','academy','hifz_men','hifz_women')"
-rows_query='SELECT concat_ws('':'',(SELECT count(*) FROM core."AppUser"),(SELECT count(*) FROM hifz_men."MenStudent"),(SELECT count(*) FROM hifz_women."WomenStudent"),(SELECT count(*) FROM academy."AcademyApplication"))'
+rows_query=$(cat <<'SQL'
+SELECT concat_ws(':',
+  (SELECT count(*) FROM core."AppUser"),
+  (SELECT count(*) FROM hifz_men."MenStudent"),
+  (SELECT count(*) FROM hifz_women."WomenStudent"),
+  (SELECT count(*) FROM academy."AcademyApplication"))
+SQL
+)
 source_tables="$(psql -X -v ON_ERROR_STOP=1 -Atqc "$table_query")"
 source_rows="$(psql -X -v ON_ERROR_STOP=1 -Atqc "$rows_query")"
 if (( source_tables < 60 )); then echo "REFUSED: source fixture schema is incomplete" >&2; exit 1; fi
