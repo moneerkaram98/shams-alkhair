@@ -110,4 +110,8 @@ SMOKE_URL="$APP_ORIGIN" npm run test:stage4:e2e
 APP_URL="$APP_ORIGIN" npm run test:stage5:e2e
 TEST_BASE_URL="$APP_ORIGIN" CONFIRM_TEST_DATABASE=YES npm run test:stage6:e2e
 CI_TEST_ONLY=YES node scripts/ci-privacy-smoke.mjs
-printf '\nPASS: synthetic admissions, stages 2-6 API smokes + section access checks.\n'
+# Rehearse backup + restore on the same ephemeral synthetic database.
+# The script will refuse any existing restore database or non-CI source.
+bash -n scripts/ci-backup-restore.sh
+CI_TEST_ONLY=YES bash scripts/ci-backup-restore.sh
+printf '\nPASS: synthetic stages 1-6 E2E, isolation, and disposable restore drill.\n'
