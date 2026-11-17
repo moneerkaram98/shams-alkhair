@@ -84,6 +84,10 @@ STAFF_EMAIL='ci.men@example.com' STAFF_NAME='CI Men Supervisor' \
  STAFF_SCOPE='HIFZ_MEN' STAFF_GENDER='MALE' npm run staff:create-user
 # Schema-owner credential is NEVER supplied to the web server or Next.js build.
 unset DATABASE_URL
+# Enable public intake ONLY in the ephemeral synthetic CI environment, after
+# confirming CI_TEST_ONLY=YES and an empty shams_alkhair_test database above.
+# The deployed project's SCHOOL_LIVE_READY value must remain false until sign-off.
+export SCHOOL_LIVE_READY=true
 npm run build
 echo '== Starting development server and testing registration, login, QR attendance == '
 npm run dev >/tmp/shams-ci-next.log 2>&1 &
