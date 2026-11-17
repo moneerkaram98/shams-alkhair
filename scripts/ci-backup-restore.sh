@@ -14,13 +14,21 @@ restore_db="shams_alkhair_restore_test"
 existing="$(psql -X -v ON_ERROR_STOP=1 -d postgres -Atqc "SELECT count(*) FROM pg_database WHERE datname='$restore_db'")"
 if [[ "$existing" != "0" ]]; then echo "REFUSED: recovery DB already exists" >&2; exit 1; fi
 
-tmp="$(mktemp -d)"
+# The PostgreSQL 17 service image provides matching pg_dump/pg_restore binaries.
+# Ubuntu runners may only have a v16 client, which cannot dump a v17 server.
+mapfile -t containers < <(docker ps -q --filter "ancestor=postgres:17-alpine")
+if [[ "${#containers[@]}" != "1" ]]; then
+  echo "REFUSED: expected exactly one disposable PostgreSQL 17 service container" >&2
+  exit 1
+fi
+service_container="${containers[0]}"
+archive=/tmp/shams_ci_synthetic_recovery.dump
 created=0
 cleanup(){
+  docker exec "$service_container" rm -f "$archive" >/dev/null 2>&1 || true
   if [[ "$created" == "1" ]]; then
     dropdb -h "$PGHOST" -U "$PGUSER" "$restore_db" >/dev/null 2>&1 || echo "WARNING: cleanup of disposable restore DB failed" >&2
   fi
-  rm -rf -- "$tmp"
 }
 trap cleanup EXIT
 
@@ -38,10 +46,10 @@ source_rows="$(psql -X -v ON_ERROR_STOP=1 -Atqc "$rows_query")"
 if (( source_tables < 60 )); then echo "REFUSED: source fixture schema is incomplete" >&2; exit 1; fi
 
 # Keep the archive exclusively in ephemeral runner storage, never as a CI artifact.
-pg_dump -h "$PGHOST" -U "$PGUSER" -Fc -f "$tmp/synthetic.dump" "$PGDATABASE"
+docker exec "$service_container" pg_dump -U postgres -d "$PGDATABASE" -Fc -f "$archive"
 createdb -h "$PGHOST" -U "$PGUSER" "$restore_db"
 created=1
-pg_restore -h "$PGHOST" -U "$PGUSER" --exit-on-error -d "$restore_db" "$tmp/synthetic.dump"
+docker exec "$service_container" pg_restore -U postgres --exit-on-error -d "$restore_db" "$archive"
 
 restored_tables="$(psql -X -v ON_ERROR_STOP=1 -d "$restore_db" -Atqc "$table_query")"
 restored_rows="$(psql -X -v ON_ERROR_STOP=1 -d "$restore_db" -Atqc "$rows_query")"
