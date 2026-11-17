@@ -22,3 +22,11 @@ test('public admissions and contact are fail-closed until explicitly approved', 
     assert.match(source.slice(gateAt,gateAt+250), /status:503/);
   }
 });
+
+test('staff authentication compares Origin with the configured canonical site origin',()=>{
+  const source=load('lib/phase2-auth.ts');
+  assert.match(source,/function safeOrigin\(/);
+  assert.match(source,/process\.env\.APP_ORIGIN/);
+  assert.match(source,/origin===new URL\(configured\)\.origin/);
+  assert.doesNotMatch(source,/req\.nextUrl\.host/);
+});
