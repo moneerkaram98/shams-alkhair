@@ -19,6 +19,6 @@ try{
  if(existing)throw Error("Account already exists; no silent password resets or role elevation");
  const salt=randomBytes(16).toString("hex"),hash=`scrypt$${salt}$${scryptSync(password,salt,64).toString("hex")}`;
  const sec=await prisma.accessScope.upsert({where:{code:scope},create:{code:scope,nameAr:scope==="SCHOOL"?"المدرسة":scope},update:{}});
- const user=await prisma.appUser.create({data:{email,displayName:name,gender,passwordHash:hash,roles:{create:{scopeId:sec.id,role}}}}});
+ const user=await prisma.appUser.create({data:{email,displayName:name,gender,passwordHash:hash,roles:{create:{scopeId:sec.id,role}}}});
  console.log(`Created ${role} account in ${scope}: ${user.id}`);
 }finally{await prisma.$disconnect();}
