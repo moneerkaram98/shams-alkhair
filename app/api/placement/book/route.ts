@@ -4,6 +4,7 @@ import { reservePlacement, ApiError } from "@/lib/admissions";
 import { allowedOrigin, isRateLimited } from "@/lib/api-guards";
 export const runtime="nodejs";
 export async function POST(req:NextRequest){
+ if(process.env.SCHOOL_LIVE_READY!=="true")return NextResponse.json({error:"حجز اختبار تحديد المستوى غير متاح حاليًا حتى اكتمال تجهيز المنصة"},{status:503,headers:{"Cache-Control":"no-store"}});
  if(!allowedOrigin(req))return NextResponse.json({error:"مصدر طلب غير مسموح"},{status:403});
  if(isRateLimited(req))return NextResponse.json({error:"محاولات كثيرة، حاول لاحقًا"},{status:429});
  if(!req.headers.get("content-type")?.startsWith("application/json"))return NextResponse.json({error:"JSON مطلوب"},{status:415});
