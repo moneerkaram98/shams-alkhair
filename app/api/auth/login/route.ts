@@ -7,6 +7,7 @@ const input=z.object({email:z.string().email().max(255),password:z.string().min(
 // Equalize the scrypt work for unknown/inactive users to reduce account enumeration.
 const DUMMY_HASH=hashPassword("dummy-account-cannot-login");
 export async function POST(req:NextRequest){
+ if(process.env.SCHOOL_LIVE_READY!=="true")return fail(503,"دخول الحسابات غير متاح حاليًا حتى اكتمال تجهيز المنصة");
  if(!safeOrigin(req))return fail(403);
  if(!req.headers.get("content-type")?.startsWith("application/json"))return fail(415);
  let parsed;try{parsed=input.safeParse(await req.json())}catch{return fail(400)}
