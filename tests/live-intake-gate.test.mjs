@@ -32,3 +32,22 @@ test('staff authentication compares Origin with the configured canonical site or
   assert.match(source,/origin===new URL\(configured\)\.origin/);
   assert.doesNotMatch(source,/req\.nextUrl\.host/);
 });
+
+test('readiness probes stay unavailable until school launch is approved',()=>{
+  const source=load('app/api/health/route.ts');
+  const flag='process.env.SCHOOL_LIVE_READY';
+  const flagAt=source.indexOf(flag);
+  const probeAt=source.indexOf("db(domain).$queryRaw");
+  assert.ok(flagAt>source.indexOf('export async function GET()'),'readiness must check activation in its handler');
+  assert.ok(probeAt>flagAt,'no database probing before launch approval');
+  assert.match(source.slice(flagAt,flagAt+180),/status:503/);
+});
+
+test('Next.js proxy blocks all API endpoints in production before school activation',()=>{
+  const source=load('proxy.ts');
+  assert.match(source,/export function proxy\(/);
+  assert.match(source,/SCHOOL_LIVE_READY/);
+  assert.match(source,/NODE_ENV !== "production"/);
+  assert.match(source,/status: 503/);
+  assert.match(source,/matcher: \["\/api\/:path\*", "\/login"\]/);
+});
