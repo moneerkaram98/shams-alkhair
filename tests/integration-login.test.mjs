@@ -7,16 +7,14 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 const require=createRequire(import.meta.url);
-let ts;
-try {ts=require('typescript');}
-catch {ts=require('/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript');}
+const ts=require('typescript');
 const source=readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../app/api/auth/login/route.ts'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 
 /** Runs the actual login route with an in-memory serialized Prisma transaction double.
  * This is a unit/concurrency check, NOT proof of PostgreSQL transaction behavior.
  */
-function fixture(){
+function fixture(live='true'){
  const state={user:{id:'user-1',isActive:true,passwordHash:'correct-pass',lockedUntil:null,failedLogins:0},sessions:[]};
  let queue=Promise.resolve();
  const tx={
@@ -53,7 +51,7 @@ function fixture(){
  };
  const exports={};
  const module={exports};
- const wrapper=vm.runInNewContext('(function(require,module,exports){'+compiled+'\n})',{}, {timeout:1000});
+ const wrapper=vm.runInNewContext('(function(require,module,exports){'+compiled+'\n})',{process:{env:{SCHOOL_LIVE_READY:live}}}, {timeout:1000});
  wrapper(mockRequire,module,exports);
  const req=password=>({headers:{get:()=> 'application/json'},json:async()=>({email:'ADMIN@SCHOOL.COM',password})});
  return {state,post:pass=>module.exports.POST(req(pass))};
@@ -87,4 +85,11 @@ test('failed attempts clear after valid login',async()=>{
  await f.post('correct-pass');
  assert.equal(f.state.user.failedLogins,0);
  assert.equal(f.state.sessions.length,1);
+});
+
+test('login remains closed and does not create a session while the school is offline',async()=>{
+ const f=fixture('false');
+ const result=await f.post('correct-pass');
+ assert.equal(result.status,503);
+ assert.equal(f.state.sessions.length,0);
 });
