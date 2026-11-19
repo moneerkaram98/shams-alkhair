@@ -30,7 +30,8 @@
     "verify:offline": "node scripts/verify-integration.mjs && node --test tests/*.test.mjs",
     "verify:strict": "node scripts/verify-integration.mjs --strict",
     "verify:db-isolation": "node scripts/verify-db-isolation.mjs",
-    "verify:release": "node scripts/release-safety.mjs"
+    "verify:release": "node scripts/release-safety.mjs",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "next": "~16.0.0",
