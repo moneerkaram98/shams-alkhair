@@ -28,7 +28,7 @@ const ready = await fetchWithTimeout('/api/health');
 assert.equal(ready.status,503,'No application DB must return unavailable health');
 assert.equal((await ready.json()).status,'unavailable');
 
-for(const path of ['/api/register','/api/contact','/api/placement/book','/api/auth/login']){
+for(const path of ['/api/register','/api/contact','/api/placement/book','/api/placement/slots','/api/application/status','/api/auth/login']){
   for(const body of ['{invalid-json','{}']){
     const response=await fetchWithTimeout(path,{
       method:'POST',
@@ -42,4 +42,4 @@ for(const path of ['/api/register','/api/contact','/api/placement/book','/api/au
     assert.equal(payload.ok,undefined);
   }
 }
-console.log('PASS: no-DB preview pages render; health=503; public admissions, booking, contact and login fail closed (503/no-store).');
+console.log('PASS: no-DB preview pages render; health=503; all public admission lookups, booking, contact and login fail closed (503/no-store).');
