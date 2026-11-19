@@ -6,6 +6,10 @@ export const dynamic='force-dynamic';
 
 /** Readiness probe. Never return private connection strings or exception details. */
 export async function GET(){
+  // A reachable database is not the same as an approved school launch.
+  // Never probe restricted roles while public/staff workflows are disabled.
+  if (process.env.SCHOOL_LIVE_READY !== 'true')
+    return NextResponse.json({status:'unavailable'},{status:503,headers:{'Cache-Control':'no-store'}});
   try{
     // Exercising all independent roles catches missing configuration at startup,
     // without reading any student tables or crossing a section's privileges.

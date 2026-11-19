@@ -44,7 +44,7 @@ export async function canTeachGroup(actor:Identity,scope:Scope,groupId:string){
 }
 export function fail(status=403,message="غير مصرح بهذا الإجراء"){return NextResponse.json({error:message},{status,headers:{"Cache-Control":"no-store"}});}
 export function privateJson(payload:unknown,status=200){return NextResponse.json(payload,{status,headers:{"Cache-Control":"no-store"}});}
-export function safeOrigin(req:NextRequest){const origin=req.headers.get("origin");if(!origin)return true;try{return new URL(origin).host===req.nextUrl.host;}catch{return false;}}
+export function safeOrigin(req:NextRequest){const origin=req.headers.get("origin");if(!origin)return true;const configured=process.env.APP_ORIGIN;if(!configured)return false;try{return origin===new URL(configured).origin;}catch{return false;}}
 export async function auditRead(scope:Scope,actor:Identity,subjectType:string,subjectId:string|null){
  if(scope!=="women")return;
  await db(scopes[scope].client).auditEvent.create({data:{actorId:actor.id,scopeCode:"HIFZ_WOMEN",action:"SENSITIVE_READ",subjectType,subjectId,reason:"authorized section access"},select:{id:true}});
